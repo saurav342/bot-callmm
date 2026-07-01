@@ -14,8 +14,8 @@ import qrcode from 'qrcode-terminal';
 // ─── CONFIGURATION ──────────────────────────────────────────
 // num2 (source) → num3 (this bot / connector) → num4 (target)
 
-const SOURCE_NUMBER = '3434434@lid';       // num2 — listen for messages FROM this number
-const TARGET_NUMBER = '585686@lid';        // num4 — forward messages TO this number
+const SOURCE_NUMBER = '194544889016378@lid';       // num2 — listen for messages FROM this number
+const TARGET_NUMBER = '202267793821759@lid';        // num4 — forward messages TO this number
 
 // ─── LOGGER ─────────────────────────────────────────────────
 const logger = pino({ level: 'silent' }); // set to 'debug' for troubleshooting
