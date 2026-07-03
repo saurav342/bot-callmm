@@ -18,7 +18,11 @@ import qrcode from 'qrcode-terminal';
 const CHAINS = [
     {
         name: 'Bot 1 (num2 connector)',
-        source: '202267793821759@lid',    // num1 — listen for messages FROM
+        source: new Set([
+            '202267793821759@lid',
+            '120363426708859608@g.us',
+            '120363409105907581@g.us',
+        ]),                                    // listen for messages FROM any of these
         target: '255061347279047@lid',    // num3 — forward messages TO
         authFolder: './auth_session',      // scan QR with num2
     },
@@ -90,7 +94,7 @@ async function startChain(chain) {
             const timestamp = new Date().toLocaleTimeString();
             const from = msg.key.remoteJid;
             const fromMe = msg.key.fromMe;
-            const isSource = from === source;
+            const isSource = source instanceof Set ? source.has(from) : from === source;
             const preview = getMessagePreview(msg);
 
             console.log(`${tag} 📩 [${timestamp}] From: ${from} | ${preview} | Source? ${isSource ? '✅' : '❌'}`);
