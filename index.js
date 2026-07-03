@@ -19,13 +19,13 @@ const CHAINS = [
     {
         name: 'Bot 1 (num2 connector)',
         source: '202267793821759@lid',    // num1 — listen for messages FROM
-        target: '204797596708883@lid',    // num3 — forward messages TO
+        target: '255061347279047@lid',    // num3 — forward messages TO
         authFolder: './auth_session',      // scan QR with num2
     },
     {
         name: 'Bot 2 (num3 connector)',
-        source: '194544889016378@lid',            // num2 — listen for messages FROM
-        target: '202267793821759@lid',             // num4 — forward messages TO
+        source: '204797596708883@lid',            // num2 — listen for messages FROM
+        target: "120363425216547154@g.us",             // num4 — forward messages TO
         authFolder: './auth_session_2',    // scan QR with num3
     },
 ];
