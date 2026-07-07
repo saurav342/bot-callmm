@@ -10,6 +10,8 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
+import { MongoClient } from 'mongodb';
+import { useMongoAuthState } from './mongo-auth.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 // Replace these with the actual WhatsApp IDs.
@@ -22,9 +24,37 @@ const TARGET_NUMBER = '204797596708883@lid';       // forward messages TO this n
 // ─── LOGGER ─────────────────────────────────────────────────
 const logger = pino({ level: 'silent' }); // set to 'debug' for troubleshooting
 
+// ─── DATABASE INITIALIZATION ────────────────────────────────
+let sessionsCollection = null;
+const SESSION_ID = 'bot_1';
+
+if (process.env.MONGODB_URL) {
+    try {
+        console.log('📦 MONGODB_URL found. Connecting to MongoDB...');
+        const mongoClient = new MongoClient(process.env.MONGODB_URL);
+        await mongoClient.connect();
+        const db = mongoClient.db();
+        sessionsCollection = db.collection('whatsapp_sessions');
+        console.log('✅ MongoDB connected successfully!');
+    } catch (err) {
+        console.error('❌ Failed to connect to MongoDB, falling back to local files:', err.message);
+    }
+} else {
+    console.log('ℹ️  No MONGODB_URL found. Local filesystem will be used for session storage.');
+}
+
 // ─── MAIN ───────────────────────────────────────────────────
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_session');
+    let authState;
+    if (sessionsCollection) {
+        console.log(`📡 Using MongoDB authentication state (session: ${SESSION_ID})`);
+        authState = await useMongoAuthState(sessionsCollection, SESSION_ID);
+    } else {
+        console.log('💾 Using filesystem authentication state');
+        authState = await useMultiFileAuthState('./auth_session');
+    }
+
+    const { state, saveCreds } = authState;
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -65,7 +95,7 @@ async function startBot() {
                 console.log('🔄 Reconnecting in 3 seconds...\n');
                 setTimeout(startBot, 3000);
             } else {
-                console.log('🚪 Logged out. Delete the ./auth_session folder and restart to re-login.\n');
+                console.log(`🚪 Logged out. Delete ${sessionsCollection ? 'session records for ' + SESSION_ID + ' from database' : 'the ./auth_session folder'} and restart to re-login.\n`);
             }
         }
     });

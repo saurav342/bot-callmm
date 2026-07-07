@@ -12,6 +12,8 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
+import { MongoClient } from 'mongodb';
+import { useMongoAuthState } from './mongo-auth.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 
@@ -25,24 +27,53 @@ const CHAINS = [
         ]),                                    // listen for messages FROM any of these
         target: '255061347279047@lid',    // num3 — forward messages TO
         authFolder: './auth_session',      // scan QR with num2
+        sessionId: 'bot_1',
     },
     {
         name: 'Bot 2 (num3 connector)',
         source: '204797596708883@lid',            // num2 — listen for messages FROM
         target: "120363425216547154@g.us",             // num4 — forward messages TO
         authFolder: './auth_session_2',    // scan QR with num3
+        sessionId: 'bot_2',
     },
 ];
+
+// ─── DATABASE INITIALIZATION ────────────────────────────────
+let sessionsCollection = null;
+
+if (process.env.MONGODB_URL) {
+    try {
+        console.log('📦 MONGODB_URL found. Connecting to MongoDB...');
+        const mongoClient = new MongoClient(process.env.MONGODB_URL);
+        await mongoClient.connect();
+        const db = mongoClient.db();
+        sessionsCollection = db.collection('whatsapp_sessions');
+        console.log('✅ MongoDB connected successfully!');
+    } catch (err) {
+        console.error('❌ Failed to connect to MongoDB, falling back to local files:', err.message);
+    }
+} else {
+    console.log('ℹ️  No MONGODB_URL found. Local filesystem will be used for session storage.');
+}
 
 // ─── LOGGER ─────────────────────────────────────────────────
 const logger = pino({ level: 'silent' });
 
 // ─── BOT STARTER ────────────────────────────────────────────
 async function startChain(chain) {
-    const { name, source, target, authFolder } = chain;
+    const { name, source, target, authFolder, sessionId } = chain;
     const tag = `[${name}]`;
 
-    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+    let authState;
+    if (sessionsCollection) {
+        console.log(`📡 ${tag} Using MongoDB authentication state (session: ${sessionId})`);
+        authState = await useMongoAuthState(sessionsCollection, sessionId);
+    } else {
+        console.log(`💾 ${tag} Using filesystem authentication state`);
+        authState = await useMultiFileAuthState(authFolder);
+    }
+
+    const { state, saveCreds } = authState;
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -79,7 +110,7 @@ async function startChain(chain) {
                 console.log(`🔄 ${tag} Reconnecting in 3 seconds...\n`);
                 setTimeout(() => startChain(chain), 3000);
             } else {
-                console.log(`🚪 ${tag} Logged out. Delete ${authFolder} and restart.\n`);
+                console.log(`🚪 ${tag} Logged out. Delete ${sessionsCollection ? 'session records for ' + sessionId + ' from database' : authFolder} and restart.\n`);
             }
         }
     });
