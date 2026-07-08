@@ -134,7 +134,7 @@ async function startChain(chain) {
 
             console.log(`${tag} ➡  Forwarding to ${target}...`);
             try {
-                await sock.sendMessage(target, { forward: msg });
+                await sock.sendMessage(target, { forward: cleanMessageForForwarding(msg) });
                 console.log(`${tag} ✅ Forwarded!`);
             } catch (err) {
                 console.error(`${tag} ❌ Failed: ${err.message}`);
@@ -144,6 +144,54 @@ async function startChain(chain) {
 }
 
 // ─── HELPERS ────────────────────────────────────────────────
+function cleanMessageForForwarding(msg) {
+    if (!msg) return msg;
+
+    const cleanMsg = {
+        ...msg,
+        key: {
+            ...msg.key,
+            fromMe: true
+        }
+    };
+
+    if (cleanMsg.message) {
+        cleanMsg.message = cloneMessage(cleanMsg.message);
+
+        for (const key of Object.keys(cleanMsg.message)) {
+            const content = cleanMsg.message[key];
+            if (content && typeof content === 'object') {
+                if (content.contextInfo) {
+                    delete content.contextInfo.forwardingScore;
+                    delete content.contextInfo.isForwarded;
+                }
+            }
+        }
+    }
+
+    return cleanMsg;
+}
+
+function cloneMessage(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    if (Buffer.isBuffer(obj)) {
+        return Buffer.from(obj);
+    }
+    if (obj instanceof Uint8Array) {
+        return new Uint8Array(obj);
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(cloneMessage);
+    }
+    const cloned = {};
+    for (const key of Object.keys(obj)) {
+        cloned[key] = cloneMessage(obj[key]);
+    }
+    return cloned;
+}
+
 function getMessagePreview(msg) {
     const m = msg.message;
     if (!m) return '[empty]';

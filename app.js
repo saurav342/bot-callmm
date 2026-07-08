@@ -149,7 +149,7 @@ async function startBot() {
             // Forward to target
             console.log(`   ➡  FORWARDING to ${TARGET_NUMBER}...`);
             try {
-                await sock.sendMessage(TARGET_NUMBER, { forward: msg });
+                await sock.sendMessage(TARGET_NUMBER, { forward: cleanMessageForForwarding(msg) });
                 console.log(`   ✅ Forwarded successfully!\n`);
             } catch (err) {
                 console.error(`   ❌ Forward FAILED: ${err.message}`);
@@ -160,6 +160,54 @@ async function startBot() {
 }
 
 // ─── HELPERS ────────────────────────────────────────────────
+
+function cleanMessageForForwarding(msg) {
+    if (!msg) return msg;
+
+    const cleanMsg = {
+        ...msg,
+        key: {
+            ...msg.key,
+            fromMe: true
+        }
+    };
+
+    if (cleanMsg.message) {
+        cleanMsg.message = cloneMessage(cleanMsg.message);
+
+        for (const key of Object.keys(cleanMsg.message)) {
+            const content = cleanMsg.message[key];
+            if (content && typeof content === 'object') {
+                if (content.contextInfo) {
+                    delete content.contextInfo.forwardingScore;
+                    delete content.contextInfo.isForwarded;
+                }
+            }
+        }
+    }
+
+    return cleanMsg;
+}
+
+function cloneMessage(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    if (Buffer.isBuffer(obj)) {
+        return Buffer.from(obj);
+    }
+    if (obj instanceof Uint8Array) {
+        return new Uint8Array(obj);
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(cloneMessage);
+    }
+    const cloned = {};
+    for (const key of Object.keys(obj)) {
+        cloned[key] = cloneMessage(obj[key]);
+    }
+    return cloned;
+}
 
 /**
  * Extract a human-readable preview of the message content.
