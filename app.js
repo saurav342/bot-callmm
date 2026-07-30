@@ -72,6 +72,31 @@ async function startBot() {
                 console.clear();
                 console.log('\n📱 Scan this QR code with your WhatsApp:\n');
                 qrcode.generate(qr, { small: true });
+            if (connection === 'open') {
+                console.log('========================================');
+                console.log('  ✅  Connected to WhatsApp!');
+                console.log('========================================');
+                console.log(`\n  📥  Listening for messages from: ${SOURCE_NUMBER}`);
+                console.log(`  📤  Forwarding messages to: ${TARGET_NUMBER}`);
+                console.log('────────────────────────────────────────\n');
+
+                try {
+                    console.log('👥 Fetching joined groups & communities...');
+                    const groups = await sock.groupFetchAllParticipating();
+                    const groupList = Object.values(groups);
+                    if (groupList.length === 0) {
+                        console.log('ℹ️  No joined groups or communities found.');
+                    } else {
+                        console.log(`📋 Joined Groups & Communities (${groupList.length}):`);
+                        for (const g of groupList) {
+                            const category = g.isCommunity ? '🏢 Community' : (g.isCommunityAnnounce ? '📢 Community Announcement' : '💬 Group');
+                            console.log(`   • ${category}: ${g.subject} | ID: ${g.id}`);
+                        }
+                    }
+                    console.log('────────────────────────────────────────\n');
+                } catch (err) {
+                    console.error('❌ Error fetching groups/communities:', err.message);
+                }
             }
 
             if (connection === 'close') {

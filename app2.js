@@ -73,15 +73,30 @@ async function startBot() {
             }
 
             if (connection === 'open') {
-                console.clear();
                 console.log('========================================');
                 console.log('  ✅  Connected to WhatsApp! (Bot 2)');
                 console.log('========================================');
-                console.log(`\n  📥  Listening for messages from (num2):`);
-                console.log(`      ${SOURCE_NUMBER}`);
-                console.log(`\n  📤  Forwarding messages to (num4):`);
-                console.log(`      ${TARGET_NUMBER}`);
-                console.log('\n────────────────────────────────────────\n');
+                console.log(`\n  📥  Listening for messages from (num2): ${SOURCE_NUMBER}`);
+                console.log(`  📤  Forwarding messages to (num4): ${TARGET_NUMBER}`);
+                console.log('────────────────────────────────────────\n');
+
+                try {
+                    console.log('👥 Fetching joined groups & communities...');
+                    const groups = await sock.groupFetchAllParticipating();
+                    const groupList = Object.values(groups);
+                    if (groupList.length === 0) {
+                        console.log('ℹ️  No joined groups or communities found.');
+                    } else {
+                        console.log(`📋 Joined Groups & Communities (${groupList.length}):`);
+                        for (const g of groupList) {
+                            const category = g.isCommunity ? '🏢 Community' : (g.isCommunityAnnounce ? '📢 Community Announcement' : '💬 Group');
+                            console.log(`   • ${category}: ${g.subject} | ID: ${g.id}`);
+                        }
+                    }
+                    console.log('────────────────────────────────────────\n');
+                } catch (err) {
+                    console.error('❌ Error fetching groups/communities:', err.message);
+                }
             }
 
             if (connection === 'close') {

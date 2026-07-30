@@ -96,9 +96,27 @@ async function startChain(chain) {
                 console.log('========================================');
                 console.log(`  ✅ ${tag} Connected!`);
                 console.log('========================================');
-                console.log(`  📥  Source: ${source}`);
+                console.log(`  📥  Source: ${source instanceof Set ? Array.from(source).join(', ') : source}`);
                 console.log(`  📤  Target: ${target}`);
                 console.log('────────────────────────────────────────\n');
+
+                try {
+                    console.log(`👥 ${tag} Fetching joined groups & communities...`);
+                    const groups = await sock.groupFetchAllParticipating();
+                    const groupList = Object.values(groups);
+                    if (groupList.length === 0) {
+                        console.log(`ℹ️  ${tag} No joined groups or communities found.`);
+                    } else {
+                        console.log(`📋 ${tag} Joined Groups & Communities (${groupList.length}):`);
+                        for (const g of groupList) {
+                            const category = g.isCommunity ? '🏢 Community' : (g.isCommunityAnnounce ? '📢 Community Announcement' : '💬 Group');
+                            console.log(`   • ${category}: ${g.subject} | ID: ${g.id}`);
+                        }
+                    }
+                    console.log('────────────────────────────────────────\n');
+                } catch (err) {
+                    console.error(`❌ ${tag} Error fetching groups/communities:`, err.message);
+                }
             }
 
             if (connection === 'close') {
