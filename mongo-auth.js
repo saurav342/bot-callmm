@@ -1,6 +1,35 @@
 import { initAuthCreds } from '@whiskeysockets/baileys/lib/Utils/auth-utils.js';
 import { BufferJSON } from '@whiskeysockets/baileys/lib/Utils/generics.js';
 import { proto } from '@whiskeysockets/baileys';
+import fs from 'fs';
+
+/**
+ * Clears session data from MongoDB database and/or filesystem auth folder.
+ * 
+ * @param {import('mongodb').Collection} collection - The MongoDB collection storing state
+ * @param {string} sessionId - Unique session ID (e.g., 'bot_1')
+ * @param {string} authFolder - Local filesystem auth directory path (optional fallback)
+ */
+export async function clearAuthState(collection, sessionId, authFolder) {
+    if (collection && sessionId) {
+        try {
+            const result = await collection.deleteMany({ _id: new RegExp(`^${sessionId}_`) });
+            console.log(`🧹 [MongoAuth] Cleared ${result.deletedCount || 0} session records for '${sessionId}' from database.`);
+        } catch (err) {
+            console.error(`❌ [MongoAuth] Failed to clear session data for '${sessionId}':`, err.message);
+        }
+    }
+
+    if (authFolder && fs.existsSync(authFolder)) {
+        try {
+            fs.rmSync(authFolder, { recursive: true, force: true });
+            console.log(`🧹 [FileSystemAuth] Cleared session directory '${authFolder}'.`);
+        } catch (err) {
+            console.error(`❌ [FileSystemAuth] Failed to clear session directory '${authFolder}':`, err.message);
+        }
+    }
+}
+
 
 /**
  * Custom MongoDB-backed authentication state provider for Baileys.

@@ -11,7 +11,7 @@ import makeWASocket, {
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { MongoClient } from 'mongodb';
-import { useMongoAuthState } from './mongo-auth.js';
+import { useMongoAuthState, clearAuthState } from './mongo-auth.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 // num2 (source) → num3 (this bot / connector) → num4 (target)
@@ -64,37 +64,44 @@ async function startBot() {
     });
 
     // ── QR Code ────────────────────────────────────────────────
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-        if (qr) {
-            console.clear();
-            console.log('\n📱 Scan this QR code with num3\'s WhatsApp:\n');
-            qrcode.generate(qr, { small: true });
-        }
-
-        if (connection === 'open') {
-            console.clear();
-            console.log('========================================');
-            console.log('  ✅  Connected to WhatsApp! (Bot 2)');
-            console.log('========================================');
-            console.log(`\n  📥  Listening for messages from (num2):`);
-            console.log(`      ${SOURCE_NUMBER}`);
-            console.log(`\n  📤  Forwarding messages to (num4):`);
-            console.log(`      ${TARGET_NUMBER}`);
-            console.log('\n────────────────────────────────────────\n');
-        }
-
-        if (connection === 'close') {
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-            console.log(`\n⚠️  Connection closed (code: ${statusCode})`);
-
-            if (shouldReconnect) {
-                console.log('🔄 Reconnecting in 3 seconds...\n');
-                setTimeout(startBot, 3000);
-            } else {
-                console.log(`🚪 Logged out. Delete ${sessionsCollection ? 'session records for ' + SESSION_ID + ' from database' : 'the ./auth_session_2 folder'} and restart to re-login.\n`);
+    sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+        try {
+            if (qr) {
+                console.clear();
+                console.log('\n📱 Scan this QR code with num3\'s WhatsApp:\n');
+                qrcode.generate(qr, { small: true });
             }
+
+            if (connection === 'open') {
+                console.clear();
+                console.log('========================================');
+                console.log('  ✅  Connected to WhatsApp! (Bot 2)');
+                console.log('========================================');
+                console.log(`\n  📥  Listening for messages from (num2):`);
+                console.log(`      ${SOURCE_NUMBER}`);
+                console.log(`\n  📤  Forwarding messages to (num4):`);
+                console.log(`      ${TARGET_NUMBER}`);
+                console.log('\n────────────────────────────────────────\n');
+            }
+
+            if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+
+                console.log(`\n⚠️  Connection closed (code: ${statusCode})`);
+
+                if (isLoggedOut) {
+                    console.log(`🚪 Logged out. Clearing session data and generating new QR code...\n`);
+                    await clearAuthState(sessionsCollection, SESSION_ID, './auth_session_2');
+                    console.log('🔄 Restarting bot in 3 seconds for new QR code...\n');
+                    setTimeout(startBot, 3000);
+                } else {
+                    console.log('🔄 Reconnecting in 3 seconds...\n');
+                    setTimeout(startBot, 3000);
+                }
+            }
+        } catch (err) {
+            console.error('❌ Error handling connection update:', err);
         }
     });
 

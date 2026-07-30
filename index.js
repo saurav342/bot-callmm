@@ -13,7 +13,7 @@ import makeWASocket, {
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { MongoClient } from 'mongodb';
-import { useMongoAuthState } from './mongo-auth.js';
+import { useMongoAuthState, clearAuthState } from './mongo-auth.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 
@@ -85,33 +85,40 @@ async function startChain(chain) {
     });
 
     // ── Connection events ──────────────────────────────────────
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-        if (qr) {
-            console.log(`\n📱 ${tag} Scan this QR code:\n`);
-            qrcode.generate(qr, { small: true });
-        }
-
-        if (connection === 'open') {
-            console.log('========================================');
-            console.log(`  ✅ ${tag} Connected!`);
-            console.log('========================================');
-            console.log(`  📥  Source: ${source}`);
-            console.log(`  📤  Target: ${target}`);
-            console.log('────────────────────────────────────────\n');
-        }
-
-        if (connection === 'close') {
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-            console.log(`\n⚠️  ${tag} Connection closed (code: ${statusCode})`);
-
-            if (shouldReconnect) {
-                console.log(`🔄 ${tag} Reconnecting in 3 seconds...\n`);
-                setTimeout(() => startChain(chain), 3000);
-            } else {
-                console.log(`🚪 ${tag} Logged out. Delete ${sessionsCollection ? 'session records for ' + sessionId + ' from database' : authFolder} and restart.\n`);
+    sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+        try {
+            if (qr) {
+                console.log(`\n📱 ${tag} Scan this QR code:\n`);
+                qrcode.generate(qr, { small: true });
             }
+
+            if (connection === 'open') {
+                console.log('========================================');
+                console.log(`  ✅ ${tag} Connected!`);
+                console.log('========================================');
+                console.log(`  📥  Source: ${source}`);
+                console.log(`  📤  Target: ${target}`);
+                console.log('────────────────────────────────────────\n');
+            }
+
+            if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut || statusCode === 401;
+
+                console.log(`\n⚠️  ${tag} Connection closed (code: ${statusCode})`);
+
+                if (isLoggedOut) {
+                    console.log(`🚪 ${tag} Logged out. Clearing session data and generating new QR code...\n`);
+                    await clearAuthState(sessionsCollection, sessionId, authFolder);
+                    console.log(`🔄 ${tag} Restarting session in 3 seconds for new QR code...\n`);
+                    setTimeout(() => startChain(chain), 3000);
+                } else {
+                    console.log(`🔄 ${tag} Reconnecting in 3 seconds...\n`);
+                    setTimeout(() => startChain(chain), 3000);
+                }
+            }
+        } catch (err) {
+            console.error(`❌ ${tag} Error handling connection update:`, err);
         }
     });
 
