@@ -32,7 +32,7 @@ const CHAINS = [
     {
         name: 'Bot 2 (num3 connector)',
         source: '204797596708883@lid',            // num2 — listen for messages FROM
-        target: "120363425216547154@g.us",             // num4 — forward messages TO
+        target: "120363411238292912@g.us",             // num4 — forward messages TO
         authFolder: './auth_session_2',    // scan QR with num3
         sessionId: 'bot_2',
     },
