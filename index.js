@@ -14,6 +14,7 @@ import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { MongoClient } from 'mongodb';
 import { useMongoAuthState, clearAuthState } from './mongo-auth.js';
+import { rephraseText } from './groq-rephraser.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 
@@ -28,13 +29,15 @@ const CHAINS = [
         target: '255061347279047@lid',    // num3 — forward messages TO
         authFolder: './auth_session',      // scan QR with num2
         sessionId: 'bot_1',
+        enableRephrase: false,             // intermediate connector (pass through as-is)
     },
     {
         name: 'Bot 2 (num3 connector)',
         source: '204797596708883@lid',            // num2 — listen for messages FROM
-        target: "120363411238292912@g.us",             // num4 — forward messages TO
+        target: "120363411238292912@g.us",             // num4 — forward messages TO (final destination)
         authFolder: './auth_session_2',    // scan QR with num3
         sessionId: 'bot_2',
+        enableRephrase: true,              // rephrase messages going to final destination using Groq
     },
 ];
 
@@ -61,7 +64,7 @@ const logger = pino({ level: 'silent' });
 
 // ─── BOT STARTER ────────────────────────────────────────────
 async function startChain(chain) {
-    const { name, source, target, authFolder, sessionId } = chain;
+    const { name, source, target, authFolder, sessionId, enableRephrase = false } = chain;
     const tag = `[${name}]`;
 
     let authState;
@@ -98,6 +101,7 @@ async function startChain(chain) {
                 console.log('========================================');
                 console.log(`  📥  Source: ${source instanceof Set ? Array.from(source).join(', ') : source}`);
                 console.log(`  📤  Target: ${target}`);
+                console.log(`  🤖  Rephrase Enabled? ${enableRephrase ? '✅ YES (llama-3.1-8b-instant)' : '❌ NO'}`);
                 console.log('────────────────────────────────────────\n');
 
                 try {
@@ -159,7 +163,8 @@ async function startChain(chain) {
 
             console.log(`${tag} ➡  Forwarding to ${target}...`);
             try {
-                await sock.sendMessage(target, { forward: cleanMessageForForwarding(msg) });
+                const messageToSend = await prepareMessageForForwarding(msg, enableRephrase, tag);
+                await sock.sendMessage(target, { forward: messageToSend });
                 console.log(`${tag} ✅ Forwarded!`);
             } catch (err) {
                 console.error(`${tag} ❌ Failed: ${err.message}`);
@@ -169,6 +174,66 @@ async function startChain(chain) {
 }
 
 // ─── HELPERS ────────────────────────────────────────────────
+async function prepareMessageForForwarding(msg, enableRephrase = false, tag = '') {
+    const cleanMsg = cleanMessageForForwarding(msg);
+    if (!enableRephrase || !cleanMsg?.message) return cleanMsg;
+
+    const m = cleanMsg.message;
+
+    try {
+        if (m.conversation) {
+            const original = m.conversation;
+            console.log(`${tag} 🤖 Rephrasing message with Groq (llama-3.1-8b-instant)...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`${tag} ✨ Original: "${original}"`);
+                console.log(`${tag} ✨ Rephrased: "${rephrased}"`);
+                m.conversation = rephrased;
+            }
+        } else if (m.extendedTextMessage?.text) {
+            const original = m.extendedTextMessage.text;
+            console.log(`${tag} 🤖 Rephrasing extended text with Groq (llama-3.1-8b-instant)...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`${tag} ✨ Original: "${original}"`);
+                console.log(`${tag} ✨ Rephrased: "${rephrased}"`);
+                m.extendedTextMessage.text = rephrased;
+            }
+        } else if (m.imageMessage?.caption) {
+            const original = m.imageMessage.caption;
+            console.log(`${tag} 🤖 Rephrasing image caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`${tag} ✨ Original Caption: "${original}"`);
+                console.log(`${tag} ✨ Rephrased Caption: "${rephrased}"`);
+                m.imageMessage.caption = rephrased;
+            }
+        } else if (m.videoMessage?.caption) {
+            const original = m.videoMessage.caption;
+            console.log(`${tag} 🤖 Rephrasing video caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`${tag} ✨ Original Caption: "${original}"`);
+                console.log(`${tag} ✨ Rephrased Caption: "${rephrased}"`);
+                m.videoMessage.caption = rephrased;
+            }
+        } else if (m.documentMessage?.caption) {
+            const original = m.documentMessage.caption;
+            console.log(`${tag} 🤖 Rephrasing document caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`${tag} ✨ Original Caption: "${original}"`);
+                console.log(`${tag} ✨ Rephrased Caption: "${rephrased}"`);
+                m.documentMessage.caption = rephrased;
+            }
+        }
+    } catch (err) {
+        console.error(`${tag} ⚠️ Error rephrasing message: ${err.message}`);
+    }
+
+    return cleanMsg;
+}
+
 function cleanMessageForForwarding(msg) {
     if (!msg) return msg;
 
@@ -243,3 +308,4 @@ for (const chain of CHAINS) {
         console.error(`💥 ${chain.name} fatal error:`, err);
     });
 }
+

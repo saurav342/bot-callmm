@@ -18,6 +18,8 @@
   "description": "WhatsApp message forwarding bot using Baileys",
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "dotenv": "^17.4.2",
+    "groq-sdk": "^1.4.1",
     "mongodb": "^7.4.0",
     "pino": "^10.3.1",
     "puppeteer": "^24.43.1",

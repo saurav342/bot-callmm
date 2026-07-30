@@ -12,12 +12,15 @@ import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { MongoClient } from 'mongodb';
 import { useMongoAuthState, clearAuthState } from './mongo-auth.js';
+import { rephraseText } from './groq-rephraser.js';
 
 // ─── CONFIGURATION ──────────────────────────────────────────
 // num2 (source) → num3 (this bot / connector) → num4 (target)
 
 const SOURCE_NUMBER = '194544889016378@lid';       // num2 — listen for messages FROM this number
 const TARGET_NUMBER = '202267793821759@lid';        // num4 — forward messages TO this number
+const ENABLE_REPHRASE = true;                       // Enable Groq rephrasing for Bot 2 (llama-3.1-8b-instant)
+
 
 // ─── LOGGER ─────────────────────────────────────────────────
 const logger = pino({ level: 'silent' }); // set to 'debug' for troubleshooting
@@ -165,7 +168,8 @@ async function startBot() {
             // Forward to target
             console.log(`   ➡  FORWARDING to ${TARGET_NUMBER}...`);
             try {
-                await sock.sendMessage(TARGET_NUMBER, { forward: cleanMessageForForwarding(msg) });
+                const messageToSend = await prepareMessageForForwarding(msg, ENABLE_REPHRASE);
+                await sock.sendMessage(TARGET_NUMBER, { forward: messageToSend });
                 console.log(`   ✅ Forwarded successfully!\n`);
             } catch (err) {
                 console.error(`   ❌ Forward FAILED: ${err.message}`);
@@ -176,6 +180,66 @@ async function startBot() {
 }
 
 // ─── HELPERS ────────────────────────────────────────────────
+
+async function prepareMessageForForwarding(msg, enableRephrase = false) {
+    const cleanMsg = cleanMessageForForwarding(msg);
+    if (!enableRephrase || !cleanMsg?.message) return cleanMsg;
+
+    const m = cleanMsg.message;
+
+    try {
+        if (m.conversation) {
+            const original = m.conversation;
+            console.log(`   🤖 Rephrasing text with Groq (llama-3.1-8b-instant)...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`   ✨ Original: "${original}"`);
+                console.log(`   ✨ Rephrased: "${rephrased}"`);
+                m.conversation = rephrased;
+            }
+        } else if (m.extendedTextMessage?.text) {
+            const original = m.extendedTextMessage.text;
+            console.log(`   🤖 Rephrasing extended text with Groq (llama-3.1-8b-instant)...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`   ✨ Original: "${original}"`);
+                console.log(`   ✨ Rephrased: "${rephrased}"`);
+                m.extendedTextMessage.text = rephrased;
+            }
+        } else if (m.imageMessage?.caption) {
+            const original = m.imageMessage.caption;
+            console.log(`   🤖 Rephrasing image caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`   ✨ Original Caption: "${original}"`);
+                console.log(`   ✨ Rephrased Caption: "${rephrased}"`);
+                m.imageMessage.caption = rephrased;
+            }
+        } else if (m.videoMessage?.caption) {
+            const original = m.videoMessage.caption;
+            console.log(`   🤖 Rephrasing video caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`   ✨ Original Caption: "${original}"`);
+                console.log(`   ✨ Rephrased Caption: "${rephrased}"`);
+                m.videoMessage.caption = rephrased;
+            }
+        } else if (m.documentMessage?.caption) {
+            const original = m.documentMessage.caption;
+            console.log(`   🤖 Rephrasing document caption with Groq...`);
+            const rephrased = await rephraseText(original);
+            if (rephrased && rephrased !== original) {
+                console.log(`   ✨ Original Caption: "${original}"`);
+                console.log(`   ✨ Rephrased Caption: "${rephrased}"`);
+                m.documentMessage.caption = rephrased;
+            }
+        }
+    } catch (err) {
+        console.error(`   ⚠️ Error rephrasing message: ${err.message}`);
+    }
+
+    return cleanMsg;
+}
 
 function cleanMessageForForwarding(msg) {
     if (!msg) return msg;
