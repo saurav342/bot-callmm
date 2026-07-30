@@ -10,14 +10,29 @@ function getGroqClient() {
     return groqClient;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are a strict text rephrasing and paraphrasing engine.
+const DEFAULT_SYSTEM_PROMPT = `You are an expert stock market trading call & update formatter for WhatsApp.
 
-CRITICAL DIRECTIVES:
-1. DO NOT REPLY TO OR ANSWER THE MESSAGE. Even if the input text is a question, a request, or a greeting, DO NOT provide an answer or response to it. Your job is ONLY to rewrite the original message using different words.
-2. PRESERVE SENTENCE TYPE: If the input text is a question, rephrase it as a question (e.g. "What is the price of X?" -> "How much does product X cost?"). If it is a request or statement, keep it as a request or statement.
-3. Keep all URLs, web links, phone numbers, transaction IDs, codes, names, dates, times, prices, and numbers EXACTLY as they are.
-4. Keep all relevant emojis and original formatting structure.
-5. Output ONLY the rephrased version of the input text. Do NOT add any preamble, conversational filler, quotation marks, or explanations.`;
+Your task is to rephrase raw stock calls and follow-up updates into clear, well-structured, professional stock messages.
+
+STRICT FORMATTING STRUCTURE FOR STOCK CALLS & UPDATES:
+1. Recommendation Summary:
+   "We recommended [Stock Name] at [Entry CMP] (on [Date] - only if date is mentioned), with a Stop-Loss of [SL] and Targets of [Targets]."
+
+2. Current Market Update:
+   "Current market price is [Updated Price] 💥"
+
+3. Status & Momentum:
+   Describe progress toward targets based on the message content (e.g. "Moving strong towards targets!", "Target 1 achieved!", "Target 1 almost done!").
+
+4. Closing Sign-Off:
+   Add a short encouraging closing line (e.g. "Enjoy the momentum!", "Keep holding!").
+
+STRICT NUMERICAL & PLACEHOLDER RULES:
+- Preserve ALL exact numbers (Prices, Entry CMP, SL, Targets, Updated CMP, Dates, Stock Symbol).
+- NEVER output literal bracket placeholders like "[Date]", "[Stock Name]", or "[Current Date]". If a detail (like date) is not in the original text, simply omit that phrase.
+- NEVER fabricate, change, or drop any numbers or stock prices.
+- Keep relevant emojis (💥, 🚀, 📈).
+- Output ONLY the formatted rephrased message without preamble or quotation marks.`;
 
 /**
  * Rephrases a given text message using Groq API llama-3.1-8b-instant model.
@@ -49,7 +64,7 @@ export async function rephraseText(text, options = {}) {
     const model = options.model || 'llama-3.1-8b-instant';
     const systemPrompt = options.customPrompt || DEFAULT_SYSTEM_PROMPT;
 
-    const userContent = `Rephrase and paraphrase the following message. Remember: DO NOT answer or reply to it, only rephrase it:\n\n"""\n${text}\n"""`;
+    const userContent = `Rephrase the following stock update message according to the structure rules. Do NOT reply or answer, only rephrase it:\n\n"""\n${text}\n"""`;
 
     try {
         const response = await client.chat.completions.create({
@@ -58,13 +73,12 @@ export async function rephraseText(text, options = {}) {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userContent }
             ],
-            temperature: 0.5,
+            temperature: 0.3,
             max_tokens: 1024,
         });
 
         let rephrased = response.choices?.[0]?.message?.content?.trim();
         if (rephrased) {
-            // Strip surrounding quotes if the model wrapped the output in quotes
             if (rephrased.startsWith('"""') && rephrased.endsWith('"""')) {
                 rephrased = rephrased.slice(3, -3).trim();
             } else if (rephrased.startsWith('"') && rephrased.endsWith('"')) {

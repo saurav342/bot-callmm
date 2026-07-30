@@ -1,20 +1,38 @@
 import { rephraseText } from './groq-rephraser.js';
 
 async function runTest() {
-    console.log('🧪 Testing Groq API Rephraser (Strict Paraphrase Test)...\n');
+    console.log('🧪 Testing Groq API Rephraser with Stock Signal Calls...\n');
     
     const testCases = [
-        "Are you free for a call at 4 PM today?",
-        "Please send me the account details as soon as possible.",
-        "What is the price of product X?",
-        "Hello team, please remember to submit your weekly report by 5 PM today. Check the link: https://example.com/reports or call +1234567890."
+        `24 July
+Axis bank cmp 1228
+SL 1199
+Target 1250/1300
+
+1237💥… This will move soon`,
+
+        `15 July
+Tata Motors cmp 950
+SL 920
+Target 980/1020
+
+975🚀… Target 1 almost done!`,
+
+        `ICICI Bank cmp 1100
+SL 1080
+TGT 1140/1180
+
+1140💥 Target 1 achieved!`
     ];
 
-    for (const [index, original] of testCases.entries()) {
-        console.log(`--- Test ${index + 1} ---`);
-        console.log(`INPUT:    "${original}"`);
-        const rephrased = await rephraseText(original);
-        console.log(`REPHRASED: "${rephrased}"\n`);
+    for (const [index, msg] of testCases.entries()) {
+        console.log(`=== TEST CASE ${index + 1} ===`);
+        console.log('--- ORIGINAL ---');
+        console.log(msg);
+        console.log('\n--- REPHRASED ---');
+        const rephrased = await rephraseText(msg);
+        console.log(rephrased);
+        console.log('\n');
     }
 }
 
