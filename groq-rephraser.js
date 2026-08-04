@@ -10,28 +10,34 @@ function getGroqClient() {
     return groqClient;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are an expert stock market trading call & update formatter for WhatsApp.
+const DEFAULT_SYSTEM_PROMPT = `You are an expert stock market trading call & update formatter for WhatsApp, covering Indian (NSE/BSE) and US (Nasdaq/NYSE) markets, Commodities, Options, and Market Commentary.
 
-Your task is to rephrase raw stock calls and follow-up updates into clear, well-structured, professional stock messages.
+Your task is to rephrase raw stock calls and follow-up updates into short, clear, well-structured, professional WhatsApp messages.
 
 STRICT FORMATTING STRUCTURE FOR STOCK CALLS & UPDATES:
-1. Recommendation Summary:
-   "We recommended [Stock Name] at [Entry CMP] (on [Date] - only if date is mentioned), with a Stop-Loss of [SL] and Targets of [Targets]."
+1. Stock Trade Calls (Fresh Entry / Buy):
+   📢 *BUY CALL: [Stock Symbol / Name]*
+   • *Entry CMP:* [Entry Price / Range]
+   • *Stop Loss:* [SL Price]
+   • *Targets:* [Target 1] | [Target 2]
+   • *Note:* [Short status note if applicable]
 
-2. Current Market Update:
-   "Current market price is [Updated Price] 💥"
+2. Trade Updates & Targets Achieved:
+   🔥 *UPDATE: [Stock Symbol / Name]*
+   • *CMP:* [Current Price] 💥 (High: [Day High if mentioned])
+   • *Status:* [Target / Milestone achieved]
+   • *Action:* [Book part profit / Trail SL / Hold]
 
-3. Status & Momentum:
-   Describe progress toward targets based on the message content (e.g. "Moving strong towards targets!", "Target 1 achieved!", "Target 1 almost done!").
-
-4. Closing Sign-Off:
-   Add a short encouraging closing line (e.g. "Enjoy the momentum!", "Keep holding!").
+3. Market Commentary, News & Earnings:
+   📊 *MARKET UPDATE: [Topic / Asset]*
+   • [Key support/resistance levels, earnings summary, or macro news bullets]
 
 STRICT NUMERICAL & PLACEHOLDER RULES:
-- Preserve ALL exact numbers (Prices, Entry CMP, SL, Targets, Updated CMP, Dates, Stock Symbol).
-- NEVER output literal bracket placeholders like "[Date]", "[Stock Name]", or "[Current Date]". If a detail (like date) is not in the original text, simply omit that phrase.
-- NEVER fabricate, change, or drop any numbers or stock prices.
-- Keep relevant emojis (💥, 🚀, 📈).
+- Preserve ALL exact numbers (Prices, Entry CMP, SL, Targets, %, Dates).
+- Differentiate US stocks ($) vs Indian stocks (₹ or points).
+- NEVER output literal bracket placeholders like "[Stock Name]".
+- Keep relevant emojis (💥, 🚀, 📈, 📢, 🔥, 📊).
+- Keep messages short, executive, and clear.
 - Output ONLY the formatted rephrased message without preamble or quotation marks.`;
 
 /**
@@ -66,30 +72,44 @@ export async function rephraseText(text, options = {}) {
 
     const userContent = `Rephrase the following stock update message according to the structure rules. Do NOT reply or answer, only rephrase it:\n\n"""\n${text}\n"""`;
 
-    try {
-        const response = await client.chat.completions.create({
-            model: model,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userContent }
-            ],
-            temperature: 0.3,
-            max_tokens: 1024,
-        });
+    const maxRetries = options.maxRetries || 5;
+    let attempt = 0;
 
-        let rephrased = response.choices?.[0]?.message?.content?.trim();
-        if (rephrased) {
-            if (rephrased.startsWith('"""') && rephrased.endsWith('"""')) {
-                rephrased = rephrased.slice(3, -3).trim();
-            } else if (rephrased.startsWith('"') && rephrased.endsWith('"')) {
-                rephrased = rephrased.slice(1, -1).trim();
+    while (attempt < maxRetries) {
+        try {
+            const response = await client.chat.completions.create({
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userContent }
+                ],
+                temperature: 0.3,
+                max_tokens: 1024,
+            });
+
+            let rephrased = response.choices?.[0]?.message?.content?.trim();
+            if (rephrased) {
+                if (rephrased.startsWith('"""') && rephrased.endsWith('"""')) {
+                    rephrased = rephrased.slice(3, -3).trim();
+                } else if (rephrased.startsWith('"') && rephrased.endsWith('"')) {
+                    rephrased = rephrased.slice(1, -1).trim();
+                }
+                return rephrased;
             }
-            return rephrased;
+            console.warn('⚠️  [Groq Rephraser] Empty response from Groq API. Using original message.');
+            return text;
+        } catch (err) {
+            attempt++;
+            const isRateLimit = err.status === 429 || (err.message && (err.message.includes('429') || err.message.includes('Rate limit')));
+            if (isRateLimit && attempt < maxRetries) {
+                const delayMs = attempt * 3000;
+                console.warn(`⏳ [Groq Rephraser] Rate limit hit (429). Retrying in ${delayMs}ms (Attempt ${attempt}/${maxRetries})...`);
+                await new Promise(res => setTimeout(res, delayMs));
+                continue;
+            }
+            console.error(`❌ [Groq Rephraser] API call failed: ${err.message}. Using original message.`);
+            return text;
         }
-        console.warn('⚠️  [Groq Rephraser] Empty response from Groq API. Using original message.');
-        return text;
-    } catch (err) {
-        console.error(`❌ [Groq Rephraser] API call failed: ${err.message}. Using original message.`);
-        return text;
     }
+    return text;
 }
